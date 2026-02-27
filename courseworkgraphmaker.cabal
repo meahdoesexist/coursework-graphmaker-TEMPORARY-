@@ -53,7 +53,7 @@ extra-doc-files:    CHANGELOG.md
 common warnings
     ghc-options: -Wall
 
-executable prograns
+executable cwgraph
     -- Import common warning flags.
     import:           warnings
 
@@ -68,7 +68,8 @@ executable prograns
 
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.19.2.0,
-                      cassava
+                      cassava,
+                      containers
 
     -- Directories containing source files.
     hs-source-dirs:   app

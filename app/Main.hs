@@ -1,54 +1,67 @@
-
 {-# LANGUAGE ScopedTypeVariables #-}
-import System.Environment 
-import Text.Read (readMaybe)
-import Data.List 
-import System.IO (readFile)
+import System.Environment
+import Data.List
+import qualified Data.Map as Map
 
 split :: Char -> String -> [String]
 split _ [] = []
-split c s = firstWord : (split c rest)
-  where firstWord = takeWhile (/= c) s
-        rest = dropWhile (== c) (drop (length firstWord) s)
+split c s = firstWord : split c rest
+  where
+    firstWord = takeWhile (/= c) s
+    rest = drop 1 (dropWhile (/= c) s)
 
-speedUp :: Float -> Float -> Float
-speedUp ts tp = ts / tp
+avg :: [Float] -> Float
+avg xs = sum xs / fromIntegral (length xs)
 
-efficiency :: Float -> Float -> Float
-efficiency ts tp = (speedUp ts tp) / ts
+-- Parse sequential CSV
+parseSeq :: String -> (Int, Float)
+parseSeq line =
+    let vals = split ',' line
+        input = read (vals !! 0)
+        runs  = map read (drop 1 vals)
+    in (input, avg runs)
 
---Csv Parser
-parseLine :: String -> (Int, Int, Float, Float, Float)
-parseLine line = 
-    let values = split ',' line
-        input  = read (head values) :: Int
-        cores  = read (values !! 1) :: Int
-        run1   = read (values !! 2) :: Float
-        run2   = read (values !! 3) :: Float
-        run3   = read (values !! 4) :: Float
-    in (input, cores, run1, run2, run3)
-       
---File reader
-processFile :: String -> IO ()
-processFile fileName = do
-    content <- readFile fileName
-    let linesOfFile = lines content
-        parsedData = map parseLine (tail linesOfFile)  -- Ignore header
-        results = map (\(input, cores, run1, run2, run3) -> 
-                        let avgSeq = (run1 + run2 + run3) / 3
-                            speedup = speedUp avgSeq (fromIntegral cores * avgSeq)
-                            eff = efficiency avgSeq (fromIntegral cores * avgSeq)
-                        in (input, cores, avgSeq, speedup, eff)) parsedData
-        newCSV = "input,cores,avgRun,speedup,efficiency\n" ++ 
-                 unlines (map (\(i, c, avg, sp, eff) -> 
-                    intercalate "," [show i, show c, show avg, show sp, show eff]) results)
-    writeFile "output.csv" newCSV
+-- Parse parallel CSV
+parsePar :: String -> (Int, Int, Float)
+parsePar line =
+    let vals = split ',' line
+        input = read (vals !! 0)
+        cores = read (vals !! 1)
+        runs  = map read (drop 2 vals)
+    in (input, cores, avg runs)
 
--- Main
+processFiles :: String -> String -> IO ()
+processFiles seqFile parFile = do
+    seqContent <- readFile seqFile
+    parContent <- readFile parFile
+
+    let seqData = Map.fromList $
+                  map parseSeq (tail (lines seqContent))
+
+        parData = map parsePar (tail (lines parContent))
+
+        results = map (compute seqData) parData
+
+        header = "input,cores,avgRun,speedup,efficiency\n"
+        body   = unlines (map format results)
+
+    writeFile "output.csv" (header ++ body)
+
+compute :: Map.Map Int Float -> (Int, Int, Float)
+        -> (Int, Int, Float, Float, Float)
+compute seqMap (input, cores, tPar) =
+    let tSeq = seqMap Map.! input
+        sp   = tSeq / tPar
+        eff  = sp / fromIntegral cores
+    in (input, cores, tPar, sp, eff)
+
+format :: (Int, Int, Float, Float, Float) -> String
+format (i,c,t,sp,eff) =
+    intercalate "," [show i, show c, show t, show sp, show eff]
+
 main :: IO ()
 main = do
     args <- getArgs
-    let parallelRuntimeFile = case args of
-            [f] -> f
-            _ -> error "Too much or not enough args/n"
-    processFile parallelRuntimeFile
+    case args of
+        [seqFile, parFile] -> processFiles seqFile parFile
+        _ -> error "Usage: program <runtime_seq.csv> <runtime_par.csv>"
