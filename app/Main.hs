@@ -1,5 +1,5 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 
+{-# LANGUAGE ScopedTypeVariables #-}
 import System.Environment 
 import Text.Read (readMaybe)
 import Data.List 
@@ -20,9 +20,14 @@ efficiency ts tp = (speedUp ts tp) / ts
 --Csv Parser
 parseLine :: String -> (Int, Int, Float, Float, Float)
 parseLine line = 
-    let [input, cores, run1, run2, run3] = map read (split ',' line)
+    let values = split ',' line
+        input  = read (head values) :: Int
+        cores  = read (values !! 1) :: Int
+        run1   = read (values !! 2) :: Float
+        run2   = read (values !! 3) :: Float
+        run3   = read (values !! 4) :: Float
     in (input, cores, run1, run2, run3)
-
+       
 --File reader
 processFile :: String -> IO ()
 processFile fileName = do
